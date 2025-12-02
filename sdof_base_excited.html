@@ -1,0 +1,1026 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>SDOF Base-Excited Harmonic Simulator — Dynamic</title>
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+  <style>
+    :root{
+      --bg:#f6f8fa; --panel:#ffffff; --accent:#0b64a0; --muted:#6b7280;
+      --card-shadow: 0 2px 8px rgba(15,23,42,0.06);
+      --radius:8px;
+    }
+    html,body{height:100%; margin:0; font-family:Inter, "Segoe UI", Roboto, Arial; background:var(--bg); color:#111;}
+    header{background:linear-gradient(90deg,var(--accent),#0870b0); color:white; padding:12px 16px; display:flex; align-items:center; justify-content:space-between;}
+    header h1{margin:0; font-size:16px; font-weight:600;}
+    .app { display:flex; flex-wrap:wrap; gap:12px; padding:14px; box-sizing:border-box; max-width:1400px; margin:0 auto;}
+    .panel{background:var(--panel); border-radius:var(--radius); box-shadow:var(--card-shadow); padding:16px;}
+    .controls{flex:0 0 350px;}
+    /* Adjusted chart layout to accommodate multiple plots */
+    .chart-grid { flex:1; min-width:400px; display: grid; grid-template-columns: 1fr 1fr; gap: 12px;}
+    .chart-container-large { grid-column: 1 / 3; height: 500px; }
+    .chart-container-small { height: 350px; }
+    
+    .notes-container { flex: 0 0 100%; } 
+    
+    .input-section h2, .scalars-section h2, .theory-section h2 { font-size:14px; color:var(--accent); border-bottom:1px solid #e5e7eb; padding-bottom:6px; margin-top:10px; margin-bottom:12px; font-weight:600;}
+    .input-group { margin-bottom:10px; display:flex; flex-direction:column; gap:4px; }
+    .input-group label { font-size:12px; font-weight:500; color:#333; display:flex; justify-content:space-between; align-items:center; }
+    .input-group input[type="number"] { padding:6px 8px; border:1px solid #ccc; border-radius:4px; font-size:14px; width:70px; text-align:right;}
+    .input-group .input-wrapper { display:flex; justify-content:space-between; align-items:center; }
+    .log-slider { flex:1; margin:0 8px; }
+
+    .scalars-table { width:100%; border-collapse:collapse; font-size:13px;}
+    .scalars-table th, .scalars-table td { padding:4px 0; text-align:left; border-bottom:1px solid #eee;}
+    .scalars-table th { font-weight:500; color:#555;}
+    .scalars-table td { font-weight:600; text-align:right; color:#111;}
+    
+    .theory-section p, .theory-section ul { font-size:13px; color:#555; margin-top:5px; line-height:1.6;}
+    .theory-section ul { padding-left:20px;}
+    
+    .equation { 
+        text-align: center; 
+        font-style: italic; 
+        font-family: monospace; 
+        font-size: 14px; 
+        background: #f0f0f0; 
+        padding: 8px; 
+        border-radius: 4px; 
+        margin: 10px 0;
+    }
+    
+    .btn { background:var(--accent); color:white; border:none; padding:8px 12px; border-radius:4px; cursor:pointer; font-size:14px; font-weight:500; transition:background 0.2s; margin-top:15px; }
+    .btn:hover { background:#0870b0; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>SDOF Base-Excited Harmonic Simulator</h1>
+  </header>
+
+  <div class="app">
+
+    <div class="panel controls">
+      <div class="input-section">
+        <h2>System Parameters</h2>
+
+        <div class="input-group">
+          <label for="unitSelect">Units:</label>
+          <select id="unitSelect" style="padding:6px 8px; border:1px solid #ccc; border-radius:4px; font-size:14px;">
+            <option value="metric">Metric (kg, N/m)</option>
+            <option value="english">English (lbm, lbf/in)</option>
+          </select>
+        </div>
+
+        <div class="input-group">
+          <label for="massInput">Mass (m): <span id="mUnitLabel">kg</span></label>
+          <div class="input-wrapper">
+            <input type="number" id="massInput" value="0.9" step="any" />
+            <input type="range" id="massSlider" min="0" max="50" class="log-slider" />
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label for="stiffInput">Stiffness (k): <span id="kUnitLabel">N/m</span></label>
+          <div class="input-wrapper">
+            <input type="number" id="stiffInput" value="175000" step="any" />
+            <input type="range" id="stiffSlider" min="0" max="50" class="log-slider" />
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label for="dampInput">Damping (c): <span id="cUnitLabel">N·s/m</span></label>
+          <div class="input-wrapper">
+            <input type="number" id="dampInput" value="78" step="any" />
+            <input type="range" id="dampSlider" min="0" max="50" class="log-slider" />
+          </div>
+        </div>
+
+        <h2>Excitation Parameters</h2>
+
+        <div class="input-group">
+          <label for="ampInput">Base Amplitude (Y): <span id="YUnitLabel">m</span></label>
+          <div class="input-wrapper">
+            <input type="number" id="ampInput" value="0.0127" step="any" />
+            <input type="range" id="ampSlider" min="0" max="50" class="log-slider" />
+          </div>
+        </div>
+
+        <div class="input-group">
+          <label for="freqInput">Base Frequency (ω/f): <span id="fUnitLabel">Hz</span></label>
+          <div class="input-wrapper">
+            <input type="number" id="freqInput" value="5" step="any" />
+            <input type="range" id="freqSlider" min="0" max="50" class="log-slider" />
+            <select id="freqUnits" style="padding:6px 4px; border:1px solid #ccc; border-radius:4px; font-size:14px; width:65px;">
+              <option value="hz">Hz</option>
+              <option value="rad">rad/s</option>
+            </select>
+          </div>
+        </div>
+        
+        <div class="input-group">
+          <label for="timeInput">Time (s):</label>
+          <div class="input-wrapper">
+            <input type="number" id="timeInput" value="20" step="any" />
+            <input type="range" id="timeSlider" min="0" max="50" class="log-slider" />
+          </div>
+        </div>
+        
+        <h2>Initial Conditions (Absolute Motion x)</h2>
+        
+        <div class="input-group">
+          <label for="x0Input">Initial Displacement (x(0)): <span id="x0UnitLabel">m</span></label>
+          <div class="input-wrapper">
+            <input type="number" id="x0Input" value="0.0" step="any" />
+            <input type="range" id="x0Slider" min="0" max="50" class="log-slider" />
+          </div>
+        </div>
+        
+        <div class="input-group">
+          <label for="v0Input">Initial Velocity (v(0)): <span id="v0UnitLabel">m/s</span></label>
+          <div class="input-wrapper">
+            <input type="number" id="v0Input" value="0" step="any" />
+            <input type="range" id="v0Slider" min="0" max="50" class="log-slider" />
+          </div>
+        </div>
+
+      </div>
+
+      <div class="scalars-section">
+        <h2>Natural Properties</h2>
+        <table class="scalars-table">
+          <tr>
+            <th>Natural Frequency (&omega;<sub>n</sub> rad/s)</th>
+            <td id="omegaN">-</td>
+          </tr>
+          <tr>
+            <th>Natural Frequency (f<sub>n</sub> Hz)</th>
+            <td id="fN">-</td>
+          </tr>
+          <tr>
+            <th>Damping Ratio (&zeta;)</th>
+            <td id="zeta">-</td>
+          </tr>
+          <tr>
+            <th>Damped Frequency (&omega;<sub>d</sub> rad/s)</th>
+            <td id="omegaD">-</td>
+          </tr>
+          <tr>
+            <th>Damped Frequency (f<sub>d</sub> Hz)</th>
+            <td id="fD">-</td>
+          </tr>
+          <tr>
+            <th>Quality Factor (Q)</th>
+            <td id="QFactor">-</td>
+          </tr>
+          <tr>
+            <th>Sample Rate (approx. Hz)</th>
+            <td id="spc">-</td>
+          </tr>
+        </table>
+      </div>
+    </div>
+
+    <div class="panel chart-grid">
+      <div class="chart-container-large">
+        <canvas id="timeHistoryChart"></canvas>
+      </div>
+      <div class="chart-container-small">
+        <canvas id="phasePlotChart"></canvas>
+      </div>
+      <div class="chart-container-small">
+        <canvas id="freqResponseChart"></canvas>
+      </div>
+      <div class="chart-container-small">
+        <canvas id="fourierSpectrumChart"></canvas>
+      </div>
+
+      <div style="grid-column: 1 / 3; display:flex; justify-content:space-between; align-items:center;">
+        <label style="font-size:14px; display:flex; align-items:center; gap:8px;">
+          <input type="checkbox" id="toggleLegend" checked />
+          Show Legend
+        </label>
+        <button id="downloadCsv" class="btn">Download CSV Data</button>
+      </div>
+    </div>
+    
+    <div class="panel notes-container">
+        <div class="theory-section">
+            <h2>Theory and Governing Equation</h2>
+            <p>This simulator models a single-degree-of-freedom (SDOF) system subject to harmonic base excitation, y(t). The system response x(t) (absolute displacement of the mass) is solved using the Runge-Kutta 4th Order (RK4) method for the time-history (Total Displacement).</p>
+            <p style="font-weight: 600; color: black;">Note: The displacement x is measured from the system's static equilibrium position. This convention ensures the equations are valid for **all orientations** (horizontal, vertical-spring-above, or vertical-spring-below) because gravity is inherently canceled out by the static spring extension.</p>
+            
+            <h3>Equation of Motion (Absolute Displacement x)</h3>
+            <div class="equation">
+                m * (d^2x/dt^2) + c * (dx/dt) + k * x = c * (dy/dt) + k * y
+            </div>
+            
+            <p>The system is numerically integrated using the **relative coordinate** approach, x_r = x - y, which yields the following governing equation:</p>
+            <div class="equation">
+                m * (d^2xr/dt^2) + c * (dxr/dt) + k * xr = -m * (d^2y/dt^2)
+            </div>
+            <p>The time-history plots the **Total Displacement** x(t), which is the sum of the transient and steady-state responses. The **Steady-State Displacement** is the analytical solution for the portion of the response that remains after the transient response has decayed.</p>
+        </div>
+    </div>
+
+  </div>
+
+<script>
+/* Core logic:
+   - Dynamic updating on all input/slider changes
+   - Plots: Time History, Phase Plot, Frequency Response (Transmissibility), Fourier Spectrum
+   - Implements user-defined Initial Conditions (x(0) and v(0))
+*/
+
+// ----- constants & conversions -----
+const IN_TO_M = 0.0254;
+const LBM_TO_KG = 0.45359237;
+const LBF_TO_N = 4.4482216152605;
+const DEFAULT_SAMPLES_PER_CYCLE = 100;
+
+// Global variable to store the last simulation result for CSV export
+let lastSimData = null; 
+let simTimer = null; // for debounce
+
+// ----- DOM refs -----
+const unitSelect = document.getElementById('unitSelect');
+const massInput = document.getElementById('massInput');
+const stiffInput = document.getElementById('stiffInput');
+const dampInput = document.getElementById('dampInput');
+const ampInput = document.getElementById('ampInput');
+const freqInput = document.getElementById('freqInput');
+const freqUnits = document.getElementById('freqUnits');
+const timeInput = document.getElementById('timeInput'); 
+const x0Input = document.getElementById('x0Input');
+const v0Input = document.getElementById('v0Input');
+const x0UnitLabel = document.getElementById('x0UnitLabel');
+const v0UnitLabel = document.getElementById('v0UnitLabel');
+
+const massSlider = document.getElementById('massSlider');
+const stiffSlider = document.getElementById('stiffSlider');
+const dampSlider = document.getElementById('dampSlider');
+const ampSlider = document.getElementById('ampSlider');
+const freqSlider = document.getElementById('freqSlider');
+const timeSlider = document.getElementById('timeSlider'); 
+const x0Slider = document.getElementById('x0Slider');
+const v0Slider = document.getElementById('v0Slider');
+
+const downloadCsv = document.getElementById('downloadCsv');
+
+const omegaNSpan = document.getElementById('omegaN');
+const fNSpan = document.getElementById('fN');
+const zetaSpan = document.getElementById('zeta');
+const omegaDSpan = document.getElementById('omegaD'); // NEW REF
+const fDSpan = document.getElementById('fD');         // NEW REF
+const QFactorSpan = document.getElementById('QFactor'); // NEW REF
+const spcSpan = document.getElementById('spc');
+
+const mUnitLabel = document.getElementById('mUnitLabel');
+const kUnitLabel = document.getElementById('kUnitLabel');
+const cUnitLabel = document.getElementById('cUnitLabel');
+const YUnitLabel = document.getElementById('YUnitLabel');
+const fUnitLabel = document.getElementById('fUnitLabel');
+
+const toggleLegend = document.getElementById('toggleLegend');
+
+// ----- slider ranges (logarithmic) -----
+const ranges = {
+  english: {
+    m: {min: 0.1, max: 200},       // lbm
+    k: {min: 0.1, max: 1e6},       // lbf/in
+    c: {min: 1e-6, max: 1e3},      // lbf*s/in
+    Y: {min: 1e-4, max: 10},       // in
+    freqHz: {min: 0.01, max: 2000},
+    timeSec: {min:0.5, max:100},
+    x0: {min: -10, max: 10},       // in (linear range)
+    v0: {min: -100, max: 100}      // in/s (linear range)
+  },
+  metric: {
+    m: {min: 0.01, max: 200},      // kg
+    k: {min: 0.1, max: 1e7},       // N/m
+    c: {min: 1e-6, max: 1e4},      // N*s/m
+    Y: {min: 1e-5, max: 1},        // m
+    freqHz: {min: 0.01, max: 2000},
+    timeSec: {min:0.5, max:100},
+    x0: {min: -0.1, max: 0.1},     // m (linear range)
+    v0: {min: -1, max: 1}          // m/s (linear range)
+  }
+};
+
+const SLIDER_STEPS = 50;
+function logMap(index, min, max) {
+  const t = index / SLIDER_STEPS;
+  if (min < 0 && max > 0) return linearMap(index, min, max); 
+  const logMin = Math.log10(min), logMax = Math.log10(max);
+  const v = Math.pow(10, logMin + t*(logMax - logMin));
+  return v;
+}
+function logUnmap(value, min, max) {
+  if (min < 0 && max > 0) return linearUnmap(value, min, max);
+  const logMin = Math.log10(min), logMax = Math.log10(max);
+  const boundedValue = Math.max(min, Math.min(max, value));
+  const t = (Math.log10(boundedValue) - logMin) / (logMax - logMin);
+  return Math.round(Math.max(0, Math.min(SLIDER_STEPS, t * SLIDER_STEPS)));
+}
+function linearMap(index, min, max) {
+  return min + (index / SLIDER_STEPS) * (max - min);
+}
+function linearUnmap(value, min, max) {
+  const boundedValue = Math.max(min, Math.min(max, value));
+  const t = (boundedValue - min) / (max - min);
+  return Math.round(Math.max(0, Math.min(SLIDER_STEPS, t * SLIDER_STEPS)));
+}
+
+
+// ----- initial UI defaults -----
+function setUnitLabels(unit) {
+  const dispUnit = (unit === 'english') ? 'in' : 'm';
+  const velUnit = (unit === 'english') ? 'in/s' : 'm/s';
+  const accelUnit = (unit === 'english') ? 'in/s²' : 'm/s²';
+  
+  if (unit === 'english') {
+    mUnitLabel.textContent = 'lbm';
+    kUnitLabel.textContent = 'lbf/in';
+    cUnitLabel.textContent = 'lbf·s/in';
+    YUnitLabel.textContent = 'in';
+  } else {
+    mUnitLabel.textContent = 'kg';
+    kUnitLabel.textContent = 'N/m';
+    cUnitLabel.textContent = 'N·s/m';
+    YUnitLabel.textContent = 'm';
+  }
+  
+  fUnitLabel.textContent = freqUnits.value === 'hz' ? 'Hz' : 'rad/s';
+  x0UnitLabel.textContent = dispUnit;
+  v0UnitLabel.textContent = velUnit;
+  
+  // Update chart y-axis titles
+  if (timeHistoryChart) timeHistoryChart.options.scales.y.title.text = `${dispUnit} • ${velUnit} • ${accelUnit}`;
+  if (phasePlotChart) phasePlotChart.options.scales.x.title.text = `Displacement x (${dispUnit})`;
+  if (phasePlotChart) phasePlotChart.options.scales.y.title.text = `Velocity v (${velUnit})`;
+}
+
+function setDefaults(unit) {
+  const r = (unit === 'english') ? ranges.english : ranges.metric;
+  
+  if (unit === 'english') {
+    massInput.value = 2.0;
+    stiffInput.value = 1000;
+    dampInput.value = 0.5;
+    ampInput.value = 0.5;
+    freqInput.value = 5;
+    timeInput.value = 20;
+    x0Input.value = 0.0; // Changed default to 0 for initial symmetry
+    v0Input.value = 0;
+  } else {
+    massInput.value = 0.9;
+    stiffInput.value = 175000;
+    dampInput.value = 78;
+    ampInput.value = 0.0127;
+    freqInput.value = 5;
+    timeInput.value = 20;
+    x0Input.value = 0.0; // Changed default to 0 for initial symmetry
+    v0Input.value = 0;
+  }
+  
+  // Set all slider values based on inputs
+  massSlider.value = logUnmap(Number(massInput.value) || r.m.min, r.m.min, r.m.max);
+  stiffSlider.value = logUnmap(Number(stiffInput.value) || r.k.min, r.k.min, r.k.max);
+  dampSlider.value = logUnmap(Number(dampInput.value) || r.c.min, r.c.min, r.c.max);
+  ampSlider.value = logUnmap(Number(ampInput.value) || r.Y.min, r.Y.min, r.Y.max);
+  
+  const currentFreq = Number(freqInput.value) || r.freqHz.min;
+  const freqHz = (freqUnits.value === 'hz') ? currentFreq : (currentFreq / (2*Math.PI));
+  freqSlider.value = logUnmap(freqHz, r.freqHz.min, r.freqHz.max);
+  
+  timeSlider.value = logUnmap(Number(timeInput.value) || r.timeSec.min, r.timeSec.min, r.timeSec.max);
+  
+  // Initial condition sliders (using linear mapping)
+  x0Slider.value = linearUnmap(Number(x0Input.value) || 0, r.x0.min, r.x0.max);
+  v0Slider.value = linearUnmap(Number(v0Input.value) || 0, r.v0.min, r.v0.max);
+  
+  setUnitLabels(unit);
+}
+
+// ----- conversions to SI for computation -----
+function toSI(params, currentUnit) {
+  const factor = (currentUnit === 'english') ? (1 / IN_TO_M) : 1;
+
+  // Convert absolute initial conditions to SI
+  const x0_si = params.x0 / factor;
+  const v0_si = params.v0 / factor;
+
+  if (currentUnit === 'english') {
+    const m_si = params.m * LBM_TO_KG; 
+    const k_si = params.k * LBF_TO_N / IN_TO_M; 
+    const c_si = params.c * LBF_TO_N / IN_TO_M; 
+    const Y_si = params.Y * IN_TO_M; 
+    let omega = params.freq;
+    if (!params.freqIsRad) omega = 2*Math.PI*params.freq;
+    return { m: m_si, k: k_si, c: c_si, Y: Y_si, omega: omega, x0: x0_si, v0: v0_si };
+  } else {
+    let omega = params.freq;
+    if (!params.freqIsRad) omega = 2*Math.PI*params.freq;
+    return { m: params.m, k: params.k, c: params.c, Y: params.Y, omega: omega, x0: params.x0, v0: params.v0 };
+  }
+}
+
+// ----- compute scalars and update UI -----
+function computeScalars() {
+  try {
+    const unit = unitSelect.value;
+    const freqIsRad = (freqUnits.value === 'rad');
+    const raw = {
+      m: Number(massInput.value) || 0,
+      k: Number(stiffInput.value) || 0,
+      c: Number(dampInput.value) || 0
+    };
+    const si = toSI({ m: raw.m, k: raw.k, c: raw.c, Y:0, freq:0, freqIsRad:freqIsRad, x0:0, v0:0 }, unit); 
+    
+    // Clear all spans on invalid input
+    if (si.m <= 1e-9 || si.k <= 1e-9) { 
+      omegaNSpan.textContent = '-'; fNSpan.textContent = '-'; zetaSpan.textContent = '-';
+      omegaDSpan.textContent = '-'; fDSpan.textContent = '-'; QFactorSpan.textContent = '-';
+      return null;
+    }
+    
+    const omegaN = Math.sqrt(si.k / si.m);
+    const fN = omegaN / (2*Math.PI);
+    // Damping Ratio: zeta = c / (2 * sqrt(k*m))
+    const zeta = si.c / (2*Math.sqrt(si.k * si.m)); 
+
+    // CALCULATE DAMPED FREQUENCY AND QUALITY FACTOR
+    let omegaD, fD, Q;
+    
+    if (zeta < 1) { // Underdamped only
+        omegaD = omegaN * Math.sqrt(1 - zeta * zeta);
+        fD = omegaD / (2 * Math.PI);
+    } else { // Critically damped (zeta=1) or Overdamped (zeta>1)
+        omegaD = 0; // Motion is non-oscillatory
+        fD = 0;
+    }
+
+    if (zeta > 0) { // Q Factor requires non-zero damping
+        Q = 1 / (2 * zeta);
+    } else {
+        Q = Infinity; // Undamped system has infinite Q
+    }
+    // END NEW CALCULATIONS
+
+    omegaNSpan.textContent = omegaN.toFixed(4);
+    fNSpan.textContent = fN.toFixed(4);
+    zetaSpan.textContent = zeta.toFixed(5);
+    
+    // UPDATE NEW SPANS
+    omegaDSpan.textContent = omegaD.toFixed(4);
+    fDSpan.textContent = fD.toFixed(4);
+    QFactorSpan.textContent = (Q === Infinity) ? 'Infinity' : Q.toFixed(3);
+    
+    return {omegaN, zeta};
+  } catch(e){ 
+      console.error("Error in computeScalars:", e); 
+      // Ensure all spans are cleared on error
+      omegaNSpan.textContent = '-'; fNSpan.textContent = '-'; zetaSpan.textContent = '-';
+      omegaDSpan.textContent = '-'; fDSpan.textContent = '-'; QFactorSpan.textContent = '-';
+      return null; 
+  }
+}
+
+// ----- RK4 integrator (Total Displacement) -----
+function integrateRK4(si, tEnd, samplesPerSec=100) {
+  const fHz = si.omega / (2*Math.PI) || 1e-9;
+  const samplesPerCycle = DEFAULT_SAMPLES_PER_CYCLE;
+  const dt = 1 / (Math.max(samplesPerSec, samplesPerCycle * fHz));
+  spcSpan.textContent = Math.round(1/dt);
+  
+  const steps = Math.max(2, Math.ceil(tEnd / dt)); 
+  
+  const t = new Array(steps+1);
+  const x = new Array(steps+1);
+  const velArr = new Array(steps+1);
+  const accelArr = new Array(steps+1);
+
+  // Base excitation at t=0
+  const y0 = si.Y * Math.sin(si.omega * 0); 
+  const vd0 = si.Y * si.omega * Math.cos(si.omega * 0); 
+
+  // Initial relative conditions based on user's absolute ICs
+  let xr = si.x0 - y0; // xr(0) = x(0) - y(0)
+  let vr = si.v0 - vd0; // vr(0) = v(0) - v_base(0)
+  let time = 0;
+  
+  for (let i=0; i<=steps; i++) {
+    t[i] = time;
+    
+    // Base motion and its derivatives
+    const y = si.Y * Math.sin(si.omega * time);
+    const yd = si.Y * si.omega * Math.cos(si.omega * time); 
+    const ydd = -si.Y * Math.pow(si.omega, 2) * Math.sin(si.omega * time);
+    
+    // Relative acceleration: m*xr_dd + c*vr + k*xr = -m*ydd(t)
+    const xr_dd = (-si.c * vr - si.k * xr - si.m * ydd) / si.m;
+    
+    // Absolute motion (x = xr + y)
+    const x_abs = xr + y;
+    const v_abs = vr + yd;
+    const a_abs = xr_dd + ydd;
+    
+    x[i] = x_abs; 
+    velArr[i] = v_abs; 
+    accelArr[i] = a_abs;
+
+    if (i < steps) {
+      // RK4 step
+      const h = Math.min(dt, tEnd - time);
+      
+      const k1x = vr;
+      const k1v = xr_dd;
+      
+      const tMid_k2 = time + 0.5*h;
+      const yddMid_k2 = -si.Y * Math.pow(si.omega, 2) * Math.sin(si.omega * tMid_k2);
+      const xr1 = xr + 0.5*h*k1x;
+      const vr1 = vr + 0.5*h*k1v;
+      const k2x = vr1;
+      const k2v = (-si.c * vr1 - si.k * xr1 - si.m * yddMid_k2) / si.m;
+      
+      const xr2 = xr + 0.5*h*k2x;
+      const vr2 = vr + 0.5*h*k2v;
+      const k3x = vr2;
+      const k3v = (-si.c * vr2 - si.k * xr2 - si.m * yddMid_k2) / si.m;
+      
+      const tFull_k4 = time + h;
+      const yddFull_k4 = -si.Y * Math.pow(si.omega, 2) * Math.sin(si.omega * tFull_k4);
+      const xr3 = xr + h*k3x;
+      const vr3 = vr + h*k3v;
+      const k4x = vr3;
+      const k4v = (-si.c * vr3 - si.k * xr3 - si.m * yddFull_k4) / si.m;
+      
+      xr = xr + (h/6)*(k1x + 2*k2x + 2*k3x + k4x);
+      vr = vr + (h/6)*(k1v + 2*k2v + 2*k3v + k4v);
+      time += h;
+    }
+  }
+  return { t, x, v: velArr, a: accelArr, dt: dt };
+}
+
+// Analytical Steady-State Calculation
+function computeSteadyState(si, tArr, scalars) {
+  if (!scalars || si.Y === 0) return {x_ss: tArr.map(() => 0), TR: 0, phi_x: 0}; 
+  
+  const { omegaN, zeta } = scalars;
+  if (omegaN < 1e-9) return {x_ss: tArr.map(() => 0), TR: 0, phi_x: 0}; 
+  
+  const r = si.omega / omegaN; // Frequency ratio
+  const denom = Math.sqrt(Math.pow(1 - r * r, 2) + Math.pow(2 * zeta * r, 2));
+  
+  // Transmissibility Ratio (TR) and phase angle (phi_x) for absolute displacement
+  const numerator = Math.sqrt(Math.pow(1, 2) + Math.pow(2 * zeta * r, 2));
+  const TR = numerator / denom;
+  const phi_x = Math.atan2(2 * zeta * r * r * r, 1 - r * r + Math.pow(2 * zeta * r, 2));
+
+  // Absolute Steady-State Displacement: x_ss(t) = Y * TR * sin(omega*t + phi_x)
+  const x_ss = tArr.map(t => {
+      return si.Y * TR * Math.sin(si.omega * t + phi_x);
+  });
+
+  return {x_ss, TR, phi_x};
+}
+
+
+// Analytical Frequency Response (Transmissibility and Phase)
+function computeFrequencyResponse(omegaN, zeta, maxR=3, numPoints=100) {
+    if (omegaN < 1e-9) return {rArr: [], TRArr: [], PhaseArr: []};
+
+    const rArr = [];
+    const TRArr = []; // Transmissibility Ratio |X/Y|
+    const PhaseArr = []; // Phase angle phi_x
+
+    for (let i = 0; i <= numPoints; i++) {
+        const r = i * maxR / numPoints; // Frequency Ratio (ω/ωn)
+        rArr.push(r);
+        
+        const denom = Math.sqrt(Math.pow(1 - r * r, 2) + Math.pow(2 * zeta * r, 2));
+        const numerator = Math.sqrt(1 + Math.pow(2 * zeta * r, 2));
+        
+        // Transmissibility (TR)
+        const TR = numerator / denom;
+        TRArr.push(TR);
+        
+        // Phase angle (phi_x)
+        const phi_x_rad = Math.atan2(2 * zeta * r * r * r, 1 - r * r + Math.pow(2 * zeta * r, 2));
+        const phi_x_deg = phi_x_rad * 180 / Math.PI;
+        PhaseArr.push(phi_x_deg);
+    }
+
+    return { rArr, TRArr, PhaseArr };
+}
+
+
+// Simple Discrete Fourier Transform (DFT) for spectral analysis
+function computeFourierTransform(timeArr, dataArr, dt) {
+    if (dataArr.length < 2) return { frequencies: [], amplitude: [] };
+
+    // Find the last steady-state cycle
+    const f_excitation = 2 * Math.PI * (Number(freqInput.value) || 1e-9); // Approx forcing frequency
+    const T_period = 2 * Math.PI / f_excitation; 
+    
+    // Calculate the number of samples in one period
+    const samples_in_period = Math.round(T_period / dt);
+
+    // Use the last 4 periods or the last full available data if shorter
+    const N_data = dataArr.length;
+    let N = 2**Math.floor(Math.log2(Math.min(N_data, samples_in_period * 4))); // Use a power of 2 for FFT/DFT efficiency, max 4 periods
+    if (N < 8) N = N_data; // Fallback if data is too short
+
+    const startIndex = N_data - N;
+    const dataSubset = dataArr.slice(startIndex);
+    
+    const frequencies = [];
+    const amplitude = [];
+    const F_s = 1 / dt; // Sampling Frequency
+
+    // Compute DFT (only positive frequencies, scaled for magnitude)
+    for (let k = 0; k < N / 2; k++) {
+        let real = 0;
+        let imag = 0;
+        
+        for (let n = 0; n < N; n++) {
+            const angle = 2 * Math.PI * k * n / N;
+            real += dataSubset[n] * Math.cos(angle);
+            imag -= dataSubset[n] * Math.sin(angle);
+        }
+        
+        // Frequency in Hz
+        const freq_k = k * F_s / N;
+        // Skip DC component and frequencies near zero, which break the log scale
+        if (freq_k < F_s / N || freq_k < 1e-5) continue; 
+
+        // Amplitude (magnitude)
+        const A_k = 2 * Math.sqrt(real * real + imag * imag) / N;
+        
+        frequencies.push(freq_k);
+        amplitude.push(A_k);
+    }
+    
+    return { frequencies, amplitude };
+}
+
+
+// NEW FUNCTION for calculating phase plot limits with padding
+function calculatePhasePlotLimits(xArr, vArr) {
+    if (xArr.length === 0 || vArr.length === 0) return { xMin: -1, xMax: 1, vMin: -1, vMax: 1 };
+    
+    const xMinVal = Math.min(...xArr);
+    const xMaxVal = Math.max(...xArr);
+    const vMinVal = Math.min(...vArr);
+    const vMaxVal = Math.max(...vArr);
+
+    const xRange = xMaxVal - xMinVal;
+    const vRange = vMaxVal - vMinVal;
+
+    // Apply 10% padding
+    const padding = 0.1;
+    
+    const xMin = xMinVal - xRange * padding;
+    const xMax = xMaxVal + xRange * padding;
+    const vMin = vMinVal - vRange * padding;
+    const vMax = vMaxVal + vRange * padding;
+
+    // Use toFixed(5) for cleaner axis labels
+    return { xMin: Number(xMin.toFixed(5)), xMax: Number(xMax.toFixed(5)), vMin: Number(vMin.toFixed(5)), vMax: Number(vMax.toFixed(5)) };
+}
+
+
+// ----- Chart setup -----
+const ctx1 = document.getElementById('timeHistoryChart').getContext('2d');
+const ctx2 = document.getElementById('phasePlotChart').getContext('2d');
+const ctx3 = document.getElementById('freqResponseChart').getContext('2d');
+const ctx4 = document.getElementById('fourierSpectrumChart').getContext('2d');
+
+let timeHistoryChart = null;
+let phasePlotChart = null;
+let freqResponseChart = null;
+let fourierSpectrumChart = null;
+
+function buildCharts(omegaN, zeta, unit) {
+  // --- A) Time History Chart (Displacement/Velocity/Acceleration) ---
+  if (timeHistoryChart) timeHistoryChart.destroy();
+  timeHistoryChart = new Chart(ctx1, {
+    type: 'line',
+    data: {
+      datasets: [
+        { label: 'Total Displacement (RK4)', data: [], borderColor:'#0b63a0', tension:0, borderWidth:2, pointRadius:0, parsing:false },
+        { label: 'Steady-State Displacement', data: [], borderColor:'#c43b31', borderDash: [5, 5], tension:0, borderWidth:2, pointRadius:0, parsing:false },
+        { label: 'Total Velocity', data: [], borderColor:'#0b9b4a', tension:0, borderWidth:1, pointRadius:0, parsing:false, hidden: true },
+        { label: 'Total Acceleration', data: [], borderColor:'#4f4f4f', tension:0, borderWidth:1, pointRadius:0, parsing:false, hidden: true }
+      ]
+    },
+    options: {
+      animation:false, maintainAspectRatio:false,
+      plugins: { legend: { display: toggleLegend.checked } },
+      scales: {
+        x: { type:'linear', title:{display:true, text:'Time (s)'} },
+        y: { title:{display:true, text: (unit === 'english') ? 'in • in/s • in/s²' : 'm • m/s • m/s²'} }
+      },
+    }
+  });
+  
+  // --- B) Phase Plot Chart (Velocity vs. Displacement) ---
+  const dispUnit = (unit === 'english') ? 'in' : 'm';
+  const velUnit = (unit === 'english') ? 'in/s' : 'm/s';
+  if (phasePlotChart) phasePlotChart.destroy();
+  phasePlotChart = new Chart(ctx2, {
+    type: 'line',
+    data: { datasets: [{ label: 'Phase Trajectory (x vs v)', data: [], borderColor:'#0b63a0', tension:0, borderWidth:1, pointRadius:0, parsing:false }] },
+    options: {
+      animation:false, maintainAspectRatio:false,
+      plugins: { legend: { display: false, position:'top' }, title: { display: true, text: 'Phase Plot (x vs. v)', font: { size: 12 } } },
+      scales: {
+        // Min/max will be set dynamically in runSimulation
+        x: { type:'linear', title:{display:true, text:`Displacement x (${dispUnit})`, font: { size: 10 }} },
+        y: { type:'linear', title:{display:true, text:`Velocity v (${velUnit})`, font: { size: 10 }} }
+      },
+      elements: { line: { tension: 0 } }
+    }
+  });
+
+  // --- C) Frequency Response Chart (Transmissibility) ---
+  const freqData = computeFrequencyResponse(omegaN, zeta);
+  if (freqResponseChart) freqResponseChart.destroy();
+  freqResponseChart = new Chart(ctx3, {
+    type: 'line',
+    data: { 
+        labels: freqData.rArr,
+        datasets: [
+            { label: 'Transmissibility |X/Y|', data: freqData.TRArr, borderColor:'#c43b31', tension:0, borderWidth:2, pointRadius:0, yAxisID: 'yTR' },
+            { label: 'Phase (deg)', data: freqData.PhaseArr, borderColor:'#0b9b4a', tension:0, borderWidth:1, pointRadius:0, yAxisID: 'yPhase' }
+        ]
+    },
+    options: {
+      animation:false, maintainAspectRatio:false,
+      plugins: { legend: { display: true, position:'bottom', labels: { boxWidth: 10, font: { size: 10 } } }, title: { display: true, text: 'Frequency Response (TR & Phase)', font: { size: 12 } } },
+      scales: {
+        x: { type:'linear', title:{display:true, text:'Frequency Ratio r (ω/ωn)', font: { size: 10 }} },
+        yTR: { position: 'left', title:{display:true, text:'Transmissibility |X/Y|', font: { size: 10 }}, grid: { drawOnChartArea: true }, min: 0 },
+        yPhase: { position: 'right', title:{display:true, text:'Phase Angle (deg)', font: { size: 10 }}, grid: { drawOnChartArea: false }, min: 0, max: 180 }
+      },
+      elements: { line: { tension: 0 } }
+    }
+  });
+
+  // --- D) Fourier Spectrum Chart ---
+  if (fourierSpectrumChart) fourierSpectrumChart.destroy();
+  fourierSpectrumChart = new Chart(ctx4, {
+    type: 'bar',
+    data: { datasets: [{ label: 'Amplitude (Steady-State)', data: [], backgroundColor:'#0b63a0' }] },
+    options: {
+      animation:false, maintainAspectRatio:false,
+      plugins: { legend: { display: false }, title: { display: true, text: 'Fourier Spectrum (Last Cycles)', font: { size: 12 } } },
+      scales: {
+        x: { 
+            type:'logarithmic', // CHANGED TO LOGARITHMIC SCALE
+            title:{display:true, text:'Frequency (Hz) (Log Scale)', font: { size: 10 }} // Updated title
+        },
+        y: { title:{display:true, text:`Amplitude (${dispUnit})`, font: { size: 10 }}, beginAtZero: true }
+      },
+    }
+  });
+}
+
+// ----- render simulation (in user display units) -----
+function renderSim(sim, ssResult, unit) {
+  const t = sim.t;
+  let xArr = sim.x, vArr = sim.v, aArr = sim.a, ssArr = ssResult.x_ss;
+  const factor = (unit === 'english') ? (1 / IN_TO_M) : 1;
+  
+  xArr = xArr.map(v => v * factor);
+  vArr = vArr.map(v => v * factor);
+  aArr = aArr.map(v => v * factor);
+  ssArr = ssArr.map(v => v * factor);
+  
+  // --- A) Time History Chart ---
+  timeHistoryChart.data.datasets[0].data = t.map((tt,i)=>({x:tt,y:xArr[i]})); // Total Disp
+  timeHistoryChart.data.datasets[1].data = t.map((tt,i)=>({x:tt,y:ssArr[i]})); // Steady State
+  timeHistoryChart.data.datasets[2].data = t.map((tt,i)=>({x:tt,y:vArr[i]})); // Velocity 
+  timeHistoryChart.data.datasets[3].data = t.map((tt,i)=>({x:tt,y:aArr[i]})); // Acceleration 
+  timeHistoryChart.options.plugins.legend.display = toggleLegend.checked;
+  timeHistoryChart.update();
+  
+  // --- B) Phase Plot Chart ---
+  phasePlotChart.data.datasets[0].data = xArr.map((xx, i) => ({ x: xx, y: vArr[i] }));
+  phasePlotChart.options.scales.x.title.text = `Displacement x (${(unit === 'english') ? 'in' : 'm'})`;
+  phasePlotChart.options.scales.y.title.text = `Velocity v (${(unit === 'english') ? 'in/s' : 'm/s'})`;
+  // AXIS LIMITS ARE SET IN runSimulation for dynamic scaling
+
+  // --- D) Fourier Spectrum Chart ---
+  const fourier = computeFourierTransform(sim.t, sim.x, sim.dt);
+  // **MODIFIED**: Data passed as objects for logarithmic scale plotting
+  const fourierData = fourier.frequencies.map((f, i) => ({
+      x: f,
+      y: fourier.amplitude[i]
+  }));
+  fourierSpectrumChart.data.labels = undefined; // Clear labels
+  fourierSpectrumChart.data.datasets[0].data = fourierData;
+  fourierSpectrumChart.options.scales.y.title.text = `Amplitude (${(unit === 'english') ? 'in' : 'm'})`;
+  fourierSpectrumChart.update();
+
+  return {xArr, vArr}; // Return display unit data for limit calculation
+}
+
+// ----- CSV export (display units) -----
+function downloadCSV(sim, ss, displayUnit) {
+  const t = sim.t;
+  let x = sim.x.slice(), v = sim.v.slice(), a = sim.a.slice(), ss_disp = ss.x_ss.slice();
+  const factor = (displayUnit === 'english') ? (1 / IN_TO_M) : 1;
+  
+  x = x.map(vv=>vv*factor); v = v.map(vv=>vv*factor); a = a.map(vv=>vv*factor);
+  ss_disp = ss_disp.map(vv=>vv*factor);
+  
+  let csv = 'time(s),total_displacement,steady_state_displacement,total_velocity,total_acceleration\n';
+  for (let i=0;i<t.length;i++) {
+    csv += `${t[i].toPrecision(8)},${x[i].toPrecision(8)},${ss_disp[i].toPrecision(8)},${v[i].toPrecision(8)},${a[i].toPrecision(8)}\n`;
+  }
+  const blob = new Blob([csv], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  
+  const linkEl = document.createElement('a'); 
+  linkEl.href = url; linkEl.download = 'sdof_base_excited.csv'; document.body.appendChild(linkEl); linkEl.click();
+  setTimeout(()=>{ URL.revokeObjectURL(url); linkEl.remove(); }, 500);
+}
+
+// CORE FUNCTION: Runs the simulation and updates the chart
+function runSimulation() {
+    clearTimeout(simTimer);
+    simTimer = setTimeout(() => {
+        try {
+            const unit = unitSelect.value;
+            const freqIsRad = (freqUnits.value === 'rad');
+            
+            const raw = {
+                m: Number(massInput.value) || 0,
+                k: Number(stiffInput.value) || 0,
+                c: Number(dampInput.value) || 0,
+                Y: Number(ampInput.value) || 0,
+                freq: Number(freqInput.value) || 0,
+                x0: Number(x0Input.value) || 0,
+                v0: Number(v0Input.value) || 0,
+                freqIsRad: freqIsRad
+            };
+            const tEnd = Number(timeInput.value) || 20;
+
+            if (raw.m <= 1e-9 || raw.k <= 1e-9 || tEnd <= 1e-9) {
+                computeScalars();
+                return;
+            }
+
+            const si = toSI(raw, unit);
+            const scalars = computeScalars();
+            
+            // integrate for total response (Transient + Steady-State)
+            const sim = integrateRK4(si, tEnd, 100); 
+            
+            // calculate analytical steady-state response
+            const ssResult = computeSteadyState(si, sim.t, scalars);
+
+            // C) Rebuild Freq Response on every change for dynamic zeta
+            const freqData = computeFrequencyResponse(scalars.omegaN, scalars.zeta);
+            freqResponseChart.data.labels = freqData.rArr;
+            freqResponseChart.data.datasets[0].data = freqData.TRArr;
+            freqResponseChart.data.datasets[1].data = freqData.PhaseArr;
+            freqResponseChart.update();
+
+            // store for CSV
+            lastSimData = { sim: sim, ss: ssResult, unit: unit }; 
+
+            // render in display units
+            const {xArr, vArr} = renderSim(sim, ssResult, unit);
+            
+            // Calculate and apply dynamic limits to the Phase Plot
+            const { xMin, xMax, vMin, vMax } = calculatePhasePlotLimits(xArr, vArr);
+            phasePlotChart.options.scales.x.min = xMin;
+            phasePlotChart.options.scales.x.max = xMax;
+            phasePlotChart.options.scales.y.min = vMin;
+            phasePlotChart.options.scales.y.max = vMax;
+            phasePlotChart.update();
+
+        } catch(e) {
+            console.error("Simulation failed:", e);
+        }
+    }, 100); 
+}
+
+
+// ----- wiring & interaction (Dynamic Update) -----
+function wire() {
+  function getRange(key) {
+    const unit = unitSelect.value;
+    const r = (unit==='english')?ranges.english:ranges.metric;
+    if (key==='m') return r.m;
+    if (key==='k') return r.k;
+    if (key==='c') return r.c;
+    if (key==='Y') return r.Y;
+    if (key==='freq') return r.freqHz;
+    if (key==='timeSec') return r.timeSec;
+    if (key==='x0') return r.x0;
+    if (key==='v0') return r.v0;
+    return {min: 0, max: 1};
+  }
+
+  function sliderToInput(slider, input, key) {
+    const r = getRange(key);
+    const mapFunc = (r.min < 0 && r.max > 0 && (key === 'x0' || key === 'v0')) ? linearMap : logMap;
+    let val = mapFunc(Number(slider.value) || 0, r.min, r.max); 
+    
+    if (key==='freq') {
+      if (freqUnits.value==='hz') input.value = Number(val.toPrecision(6));
+      else input.value = Number((2*Math.PI*val).toPrecision(6));
+    } else {
+      input.value = (Math.abs(val) < 1e-3) ? val.toPrecision(4) : Number(val.toPrecision(6));
+    }
+    runSimulation();
+  }
+  
+  function inputToSlider(input, slider, key) {
+    const r = getRange(key);
+    const unmapFunc = (r.min < 0 && r.max > 0 && (key === 'x0' || key === 'v0')) ? linearUnmap : logUnmap;
+    let val = Number(input.value) || r.min; 
+    
+    if (key==='freq' && freqUnits.value==='rad'){ val = val / (2*Math.PI); } 
+    slider.value = unmapFunc(val, r.min, r.max);
+    runSimulation();
+  }
+
+  // SLIDER EVENTS: Call runSimulation on input/change
+  massSlider.addEventListener('input', ()=> sliderToInput(massSlider, massInput, 'm'));
+  stiffSlider.addEventListener('input', ()=> sliderToInput(stiffSlider, stiffInput, 'k'));
+  dampSlider.addEventListener('input', ()=> sliderToInput(dampSlider, dampInput, 'c'));
+  ampSlider.addEventListener('input', ()=> sliderToInput(ampSlider, ampInput, 'Y'));
+  freqSlider.addEventListener('input', ()=> sliderToInput(freqSlider, freqInput, 'freq'));
+  timeSlider.addEventListener('input', ()=> sliderToInput(timeSlider, timeInput, 'timeSec')); 
+  x0Slider.addEventListener('input', ()=> sliderToInput(x0Slider, x0Input, 'x0')); 
+  v0Slider.addEventListener('input', ()=> sliderToInput(v0Slider, v0Input, 'v0')); 
+
+  // INPUT EVENTS: Call runSimulation on input/change
+  massInput.addEventListener('input', ()=> inputToSlider(massInput, massSlider, 'm'));
+  stiffInput.addEventListener('input', ()=> inputToSlider(stiffInput, stiffSlider, 'k'));
+  dampInput.addEventListener('input', ()=> inputToSlider(dampInput, dampSlider, 'c'));
+  ampInput.addEventListener('input', ()=> inputToSlider(ampInput, ampSlider, 'Y'));
+  freqInput.addEventListener('input', ()=> inputToSlider(freqInput, freqSlider, 'freq'));
+  timeInput.addEventListener('input', ()=> inputToSlider(timeInput, timeSlider, 'timeSec')); 
+  x0Input.addEventListener('input', ()=> inputToSlider(x0Input, x0Slider, 'x0')); 
+  v0Input.addEventListener('input', ()=> inputToSlider(v0Input, v0Slider, 'v0')); 
+
+  // unit change: change labels and defaults, then run
+  unitSelect.addEventListener('change', ()=>{ setUnitLabels(unitSelect.value); setDefaults(unitSelect.value); runSimulation(); });
+
+  // freq units switch: adjust label and input value conversion, then run
+  freqUnits.addEventListener('change', ()=>{
+    const cur = Number(freqInput.value) || 0;
+    if (freqUnits.value==='rad') { 
+      freqInput.value = (cur * 2*Math.PI).toPrecision(6);
+    } else { 
+      freqInput.value = (cur / (2*Math.PI)).toPrecision(6);
+    }
+    setUnitLabels(unitSelect.value);
+    inputToSlider(freqInput, freqSlider, 'freq');
+  });
+  
+  // CSV
+  downloadCsv.addEventListener('click', ()=>{
+    if (lastSimData && lastSimData.sim) downloadCSV(lastSimData.sim, lastSimData.ss, lastSimData.unit);
+    else alert('No simulation data found. Try changing an input first.');
+  });
+
+  // legend toggle
+  toggleLegend.addEventListener('change', ()=> { 
+    if (timeHistoryChart) { 
+        timeHistoryChart.options.plugins.legend.display = toggleLegend.checked; 
+        timeHistoryChart.update(); 
+    }
+    // Only update for Freq Response, Phase Plot is hardcoded to hide it 
+    if (freqResponseChart) {
+        freqResponseChart.options.plugins.legend.display = toggleLegend.checked;
+        freqResponseChart.update();
+    }
+  });
+}
+
+// ----- init -----
+function init() {
+  setDefaults(unitSelect.value);
+  // Re-set initial displacement to 0.0 for metric as the previous file showed 1.0
+  document.getElementById('x0Input').value = '0.0'; 
+  const scalars = computeScalars();
+  buildCharts(scalars ? scalars.omegaN : 0, scalars ? scalars.zeta : 0, unitSelect.value);
+  wire();
+  // RUN ON STARTUP
+  runSimulation();
+}
+
+init();
+
+</script>
+</body>
+</html>
